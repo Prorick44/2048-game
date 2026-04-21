@@ -8,16 +8,16 @@ import { submitScore, getTopScores } from "./firebase";
 export default function App() {
   const [board, setBoard] = useState(initBoard());
   const [score, setScore] = useState(0);
-  const [best, setBestScore] = useState(getBest());
+  const [best, setBestScore] = useState(0);
   const [history, setHistory] = useState([]);
   const [dark, setDark] = useState(true);
 
   const [leaderboard, setLeaderboard] = useState([]);
   const [name, setName] = useState("");
-
   const [showRules, setShowRules] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
 
-  // 🔥 BEST SCORE INIT (fresh from now logic)
+  // 🔥 BEST SCORE (fresh start once)
   useEffect(() => {
     const freshStart = localStorage.getItem("freshBestStart");
 
@@ -31,10 +31,12 @@ export default function App() {
     }
   }, []);
 
+  // 🔥 LOAD LEADERBOARD
   useEffect(() => {
     getTopScores().then(setLeaderboard);
   }, []);
 
+  // 🔥 UPDATE BEST
   useEffect(() => {
     if (score > best) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -43,13 +45,13 @@ export default function App() {
     }
   }, [score]);
 
-  // 🔥 FIX SCROLL ISSUE + CONTROLS
+  // 🔥 KEYBOARD (NO SCROLL)
   useEffect(() => {
     const keyHandler = (e) => {
       const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
       if (keys.includes(e.key)) {
-        e.preventDefault(); // 🚀 stops scrolling
+        e.preventDefault();
 
         // eslint-disable-next-line react-hooks/immutability
         if (e.key === "ArrowLeft") move("LEFT");
@@ -67,6 +69,7 @@ export default function App() {
     document.body.className = dark ? "dark" : "";
   }, [dark]);
 
+  // 🔥 MOVE
   const move = (dir) => {
     let s = { score: 0 },
       nb;
@@ -84,11 +87,17 @@ export default function App() {
       moveSound();
       if (s.score) mergeSound();
 
-      if (win(nb)) winSound();
-      if (gameOver(nb)) loseSound();
+      if (win(nb)) {
+        winSound();
+        setIsGameOver(true);
+      } else if (gameOver(nb)) {
+        loseSound();
+        setIsGameOver(true);
+      }
     }
   };
 
+  // 🔥 UNDO
   const undo = () => {
     if (!history.length) return;
     const last = history[history.length - 1];
@@ -97,12 +106,16 @@ export default function App() {
     setHistory((h) => h.slice(0, -1));
   };
 
+  // 🔥 RESET
   const reset = () => {
     setBoard(initBoard());
     setScore(0);
     setHistory([]);
+    setIsGameOver(false);
+    setName("");
   };
 
+  // 🔥 SAVE SCORE
   const saveScore = async () => {
     if (!name) return;
     await submitScore(name, score);
@@ -142,12 +155,22 @@ export default function App() {
         <button onClick={() => setDark(!dark)}>Theme</button>
       </div>
 
-      {(gameOver(board) || win(board)) && (
+      {/* 🔥 MODAL (GAME OVER / WIN + SUBMIT) */}
+      {isGameOver && (
         <div className="modal-backdrop">
           <div className="modal">
             <h2>{win(board) ? "🎉 You Win!" : "💀 Game Over"}</h2>
-
             <p>Score: {score}</p>
+
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your name"
+            />
+
+            <button disabled={!name} onClick={saveScore}>
+              Submit Score
+            </button>
 
             <div className="modal-actions">
               <button onClick={reset}>Play Again</button>
@@ -157,6 +180,7 @@ export default function App() {
         </div>
       )}
 
+      {/* 🔥 GRID */}
       <div className="grid">
         {board.map((r, i) =>
           r.map((c, j) => (
@@ -167,14 +191,9 @@ export default function App() {
         )}
       </div>
 
+      {/* 🔥 LEADERBOARD DISPLAY ONLY */}
       <div className="leaderboard">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Name"
-        />
-        <button onClick={saveScore}>Submit</button>
-
+        <h3>Leaderboard</h3>
         {leaderboard.map((p, i) => (
           <div key={i}>
             {i + 1}. {p.name} - {p.score}

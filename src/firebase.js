@@ -10,12 +10,12 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD_0AExkQp9KpgYMtGTdFJrOgrSrkbT46Y",
-  authDomain: "game-daa28.firebaseapp.com",
-  projectId: "game-daa28",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: "game-daa28.firebasestorage.app",
   messagingSenderId: "474411172809",
-  appId: "1:474411172809:web:98be72dd14fa502a4bde18",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
