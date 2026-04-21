@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import confetti from "canvas-confetti";
+
 import { initBoard } from "./utils/game";
 import { left, right, up, down, gameOver, win } from "./utils/move";
 import { getBest, setBest } from "./utils/storage";
@@ -10,18 +12,21 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [best, setBestScore] = useState(0);
   const [history, setHistory] = useState([]);
+
   const [dark, setDark] = useState(true);
+  const [showRules, setShowRules] = useState(false);
 
   const [leaderboard, setLeaderboard] = useState([]);
   const [name, setName] = useState("");
-  const [showRules, setShowRules] = useState(false);
+
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isNewBest, setIsNewBest] = useState(false);
 
-  // 🔥 BEST SCORE (fresh start once)
+  // 🔥 best score fresh start
   useEffect(() => {
-    const freshStart = localStorage.getItem("freshBestStart");
-
-    if (!freshStart) {
+    const flag = localStorage.getItem("freshBestStart");
+    if (!flag) {
       localStorage.setItem("best", "0");
       localStorage.setItem("freshBestStart", "true");
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -31,25 +36,26 @@ export default function App() {
     }
   }, []);
 
-  // 🔥 LOAD LEADERBOARD
+  // 🔥 leaderboard
   useEffect(() => {
     getTopScores().then(setLeaderboard);
   }, []);
 
-  // 🔥 UPDATE BEST
+  // 🔥 update best
   useEffect(() => {
     if (score > best) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBestScore(score);
       setBest(score);
+      setIsNewBest(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [score]);
 
-  // 🔥 KEYBOARD (NO SCROLL)
+  // 🔥 keyboard control (NO SCROLL)
   useEffect(() => {
-    const keyHandler = (e) => {
+    const handler = (e) => {
       const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
-
       if (keys.includes(e.key)) {
         e.preventDefault();
 
@@ -60,16 +66,14 @@ export default function App() {
         if (e.key === "ArrowDown") move("DOWN");
       }
     };
-
-    window.addEventListener("keydown", keyHandler, { passive: false });
-    return () => window.removeEventListener("keydown", keyHandler);
+    window.addEventListener("keydown", handler, { passive: false });
+    return () => window.removeEventListener("keydown", handler);
   });
 
   useEffect(() => {
     document.body.className = dark ? "dark" : "";
   }, [dark]);
 
-  // 🔥 MOVE
   const move = (dir) => {
     let s = { score: 0 },
       nb;
@@ -89,6 +93,7 @@ export default function App() {
 
       if (win(nb)) {
         winSound();
+        confetti({ particleCount: 120, spread: 70 });
         setIsGameOver(true);
       } else if (gameOver(nb)) {
         loseSound();
@@ -97,7 +102,6 @@ export default function App() {
     }
   };
 
-  // 🔥 UNDO
   const undo = () => {
     if (!history.length) return;
     const last = history[history.length - 1];
@@ -106,41 +110,35 @@ export default function App() {
     setHistory((h) => h.slice(0, -1));
   };
 
-  // 🔥 RESET
   const reset = () => {
     setBoard(initBoard());
     setScore(0);
     setHistory([]);
     setIsGameOver(false);
     setName("");
+    setIsSubmitted(false);
+    setIsNewBest(false);
   };
 
-  // 🔥 SAVE SCORE
   const saveScore = async () => {
-    if (!name) return;
+    if (!name || isSubmitted) return;
     await submitScore(name, score);
     setLeaderboard(await getTopScores());
-    setName("");
+    setIsSubmitted(true);
   };
 
   return (
     <div className="app">
       <h1>2048</h1>
 
-      {/* 🔥 COLLAPSIBLE RULES */}
+      {/* Rules */}
       <div className="rules-box">
-        <button
-          className="rules-toggle"
-          onClick={() => setShowRules((prev) => !prev)}
-        >
+        <button onClick={() => setShowRules((p) => !p)}>
           {showRules ? "Hide Rules ▲" : "Show Rules ▼"}
         </button>
-
         {showRules && (
           <p className="rules">
-            Combine tiles using arrow keys. When two tiles with the same value
-            collide, they merge into one with double the value. Each move adds a
-            new tile (2 or 4). Avoid filling the board. Reach 2048 to win.
+            Combine tiles using arrow keys. Same numbers merge. Reach 2048.
           </p>
         )}
       </div>
@@ -155,21 +153,24 @@ export default function App() {
         <button onClick={() => setDark(!dark)}>Theme</button>
       </div>
 
-      {/* 🔥 MODAL (GAME OVER / WIN + SUBMIT) */}
+      {/* MODAL */}
       {isGameOver && (
         <div className="modal-backdrop">
           <div className="modal">
             <h2>{win(board) ? "🎉 You Win!" : "💀 Game Over"}</h2>
             <p>Score: {score}</p>
 
+            {isNewBest && <p className="new-best">🏆 New High Score!</p>}
+
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your name"
+              placeholder="Enter name"
+              onKeyDown={(e) => e.key === "Enter" && saveScore()}
             />
 
-            <button disabled={!name} onClick={saveScore}>
-              Submit Score
+            <button disabled={!name || isSubmitted} onClick={saveScore}>
+              {isSubmitted ? "Submitted ✔" : "Submit Score"}
             </button>
 
             <div className="modal-actions">
@@ -180,7 +181,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 🔥 GRID */}
+      {/* GRID */}
       <div className="grid">
         {board.map((r, i) =>
           r.map((c, j) => (
@@ -191,7 +192,7 @@ export default function App() {
         )}
       </div>
 
-      {/* 🔥 LEADERBOARD DISPLAY ONLY */}
+      {/* Leaderboard */}
       <div className="leaderboard">
         <h3>Leaderboard</h3>
         {leaderboard.map((p, i) => (

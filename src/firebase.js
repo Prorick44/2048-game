@@ -13,20 +13,14 @@ const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: "game-daa28.firebasestorage.app",
-  messagingSenderId: "474411172809",
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+const db = getFirestore(app);
 
 export const submitScore = async (name, score) => {
-  await addDoc(collection(db, "scores"), {
-    name,
-    score,
-    created: Date.now(),
-  });
+  await addDoc(collection(db, "scores"), { name, score });
 };
 
 export const getTopScores = async () => {
