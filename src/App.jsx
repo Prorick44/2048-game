@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { initBoard } from "./utils/game";
 import { left, right, up, down, gameOver, win } from "./utils/move";
-import { bestMove } from "./utils/ai";
 import { getBest, setBest } from "./utils/storage";
 import { moveSound, mergeSound, winSound, loseSound } from "./utils/sound";
 import { submitScore, getTopScores } from "./firebase";
@@ -16,6 +15,22 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [name, setName] = useState("");
 
+  const [showRules, setShowRules] = useState(false);
+
+  // 🔥 BEST SCORE INIT (fresh from now logic)
+  useEffect(() => {
+    const freshStart = localStorage.getItem("freshBestStart");
+
+    if (!freshStart) {
+      localStorage.setItem("best", "0");
+      localStorage.setItem("freshBestStart", "true");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBestScore(0);
+    } else {
+      setBestScore(getBest());
+    }
+  }, []);
+
   useEffect(() => {
     getTopScores().then(setLeaderboard);
   }, []);
@@ -28,16 +43,24 @@ export default function App() {
     }
   }, [score]);
 
+  // 🔥 FIX SCROLL ISSUE + CONTROLS
   useEffect(() => {
-    const handleKey = (e) => {
-      // eslint-disable-next-line react-hooks/immutability
-      if (e.key === "ArrowLeft") move("LEFT");
-      if (e.key === "ArrowRight") move("RIGHT");
-      if (e.key === "ArrowUp") move("UP");
-      if (e.key === "ArrowDown") move("DOWN");
+    const keyHandler = (e) => {
+      const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+
+      if (keys.includes(e.key)) {
+        e.preventDefault(); // 🚀 stops scrolling
+
+        // eslint-disable-next-line react-hooks/immutability
+        if (e.key === "ArrowLeft") move("LEFT");
+        if (e.key === "ArrowRight") move("RIGHT");
+        if (e.key === "ArrowUp") move("UP");
+        if (e.key === "ArrowDown") move("DOWN");
+      }
     };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+
+    window.addEventListener("keydown", keyHandler, { passive: false });
+    return () => window.removeEventListener("keydown", keyHandler);
   });
 
   useEffect(() => {
@@ -45,8 +68,8 @@ export default function App() {
   }, [dark]);
 
   const move = (dir) => {
-    let s = { score: 0 };
-    let nb;
+    let s = { score: 0 },
+      nb;
 
     if (dir === "LEFT") nb = left(board, s);
     if (dir === "RIGHT") nb = right(board, s);
@@ -64,40 +87,6 @@ export default function App() {
       if (win(nb)) winSound();
       if (gameOver(nb)) loseSound();
     }
-  };
-
-  const auto = () => {
-    let running = true;
-
-    const loop = () => {
-      if (!running) return;
-
-      setBoard((prev) => {
-        const m = bestMove(prev);
-        if (!m) {
-          running = false;
-          return prev;
-        }
-
-        let s = { score: 0 };
-        let nb;
-
-        if (m === "LEFT") nb = left(prev, s);
-        if (m === "RIGHT") nb = right(prev, s);
-        if (m === "UP") nb = up(prev, s);
-        if (m === "DOWN") nb = down(prev, s);
-
-        setScore((p) => p + s.score);
-
-        moveSound();
-        if (s.score) mergeSound();
-
-        setTimeout(loop, 70);
-        return nb;
-      });
-    };
-
-    loop();
   };
 
   const undo = () => {
@@ -123,23 +112,49 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="header">
-        <h1>2048</h1>
-        <div className="scores">
-          <div>Score {score}</div>
-          <div>Best {best}</div>
-        </div>
+      <h1>2048</h1>
+
+      {/* 🔥 COLLAPSIBLE RULES */}
+      <div className="rules-box">
+        <button
+          className="rules-toggle"
+          onClick={() => setShowRules((prev) => !prev)}
+        >
+          {showRules ? "Hide Rules ▲" : "Show Rules ▼"}
+        </button>
+
+        {showRules && (
+          <p className="rules">
+            Combine tiles using arrow keys. When two tiles with the same value
+            collide, they merge into one with double the value. Each move adds a
+            new tile (2 or 4). Avoid filling the board. Reach 2048 to win.
+          </p>
+        )}
       </div>
+
+      <h2>
+        Score: {score} | Best: {best}
+      </h2>
 
       <div className="controls">
         <button onClick={undo}>Undo</button>
-        <button onClick={auto}>Auto</button>
         <button onClick={reset}>Restart</button>
         <button onClick={() => setDark(!dark)}>Theme</button>
       </div>
 
       {(gameOver(board) || win(board)) && (
-        <div className="overlay">{win(board) ? "YOU WIN 🎉" : "GAME OVER"}</div>
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>{win(board) ? "🎉 You Win!" : "💀 Game Over"}</h2>
+
+            <p>Score: {score}</p>
+
+            <div className="modal-actions">
+              <button onClick={reset}>Play Again</button>
+              <button onClick={undo}>Undo</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="grid">
@@ -153,7 +168,6 @@ export default function App() {
       </div>
 
       <div className="leaderboard">
-        <h3>Leaderboard</h3>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
